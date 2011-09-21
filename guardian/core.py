@@ -21,7 +21,7 @@ class ObjectPermissionChecker(object):
        On the other hand, if we call ``has_perm`` for perm1/object1, then we
        change permission state and call ``has_perm`` again for same
        perm1/object1 on same instance of ObjectPermissionChecker we won't see a
-       difference as permissions are already fetched and stored within cache
+       difference as permissions are already fetched and stored as cache
        dictionary.
     """
     def __init__(self, user_or_group=None):
@@ -50,13 +50,13 @@ class ObjectPermissionChecker(object):
 
     def get_perms(self, obj):
         """
-        Returns list of ``codename``'s of all permissions for given ``obj``.
+        Returns list of ``codename``s of all permissions for given ``obj``.
 
         :param obj: Django model instance for which permission should be checked
 
         """
         ctype = ContentType.objects.get_for_model(obj)
-        key = self.get_local_cache_key(obj)
+        key = (ctype.id, obj.id)
         if not key in self._obj_perms_cache:
             if self.user and not self.user.is_active:
                 return []
@@ -67,13 +67,13 @@ class ObjectPermissionChecker(object):
             elif self.user:
                 user_perms = set(chain(*Permission.objects
                     .filter(content_type=ctype,
-                            userobjectpermission__content_type=F('content_type'),
+                            userobjectpermission__content_type=ctype,
                             userobjectpermission__user=self.user,
                             userobjectpermission__object_id=obj.id)
                     .values_list("codename")))
                 group_perms = set(chain(*Permission.objects
                     .filter(content_type=ctype,
-                            groupobjectpermission__content_type=F('content_type'),
+                            groupobjectpermission__content_type=ctype,
                             groupobjectpermission__group__user=self.user,
                             groupobjectpermission__object_id=obj.id)
                     .values_list("codename")))
@@ -82,17 +82,10 @@ class ObjectPermissionChecker(object):
                 perms = list(set(chain(*Permission.objects
                     .filter(content_type=ctype)
                     .filter(
-                        groupobjectpermission__content_type=F('content_type'),
+                        groupobjectpermission__content_type=ctype,
                         groupobjectpermission__group=self.group,
-                        groupobjectpermission__object_pk=obj.pk)
+                        groupobjectpermission__object_id=obj.id)
                     .values_list("codename"))))
             self._obj_perms_cache[key] = perms
         return self._obj_perms_cache[key]
-
-    def get_local_cache_key(self, obj):
-        """
-        Returns cache key for ``_obj_perms_cache`` dict.
-        """
-        ctype = ContentType.objects.get_for_model(obj)
-        return (ctype.id, obj.pk)
 
